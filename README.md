@@ -112,6 +112,6 @@ Based on the materials of the **Analytical Methods** course taught by **Prof. Lu
 
 <div align="center">
 
-Made by 💜 **[María José Ospina Samboni](https://github.com/naksu707)** 💜
+Made by 💜 **[Maria Jose Ospina](https://github.com/naksu707)** 💜
 
 </div>
