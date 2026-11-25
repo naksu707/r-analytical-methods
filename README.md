@@ -106,10 +106,6 @@ r-analytical-methods/
 
 ---
 
-## 🙏 Acknowledgements
-
-Based on the materials of the **Analytical Methods** course taught by **Prof. Luis Fernando Delgado**. Built-in R datasets (`iris`, `ToothGrowth`, `ChickWeight`, `Orange`), `tidyr::who`, `agricolae::frijol` and the Titanic dataset are used for educational purposes.
-
 <div align="center">
 
 Made by 💜 **[Maria Jose Ospina](https://github.com/naksu707)** 💜
