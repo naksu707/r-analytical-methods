@@ -9,18 +9,15 @@
 
 </div>
 
-> [!NOTE]
-> **Status: in progress 🚧** · The class exercises are being reorganized, corrected and documented as R Markdown reports.
-
 ---
 
 ## 💡 About
 
-This repository collects my work from the **Analytical Methods** course, organized as a step-by-step path through a typical data analysis workflow in R:
+This repository collects my work from the **Analytical Methods** course, reorganized as a step-by-step path through a typical data analysis workflow in R:
 
 **explore → visualize → tidy → model → apply to a real problem**
 
-Each folder contains an R Markdown report rendered as a GitHub document, so the code, results and plots can be read directly on GitHub.
+Each folder contains an R Markdown report rendered as a GitHub document: open any folder to read the code, results and plots directly on GitHub.
 
 ---
 
@@ -28,11 +25,11 @@ Each folder contains an R Markdown report rendered as a GitHub document, so the 
 
 | # | Topic | Data | What it covers |
 |---|---|---|---|
-| 01 | [**R basics and exploratory analysis**](01-r-basics-and-eda/) | Chili pepper (*Capsicum*) accessions · `Orange` trees | Data structures, missing-value codes (999 → `NA`), frequency tables, summary statistics, correlation |
-| 02 | [**Data visualization with ggplot2**](02-data-visualization/) | `iris` · `ToothGrowth` · `ChickWeight` · Titanic | Grammar of graphics, scatter, bar, box and violin plots, facets, themes, interactive plots with plotly |
-| 03 | [**Tidy data**](03-tidy-data/) | WHO tuberculosis report (`tidyr::who`) | Reshaping a messy real dataset with `pivot_longer()`, `separate()` and `mutate()` |
-| 04 | [**Linear regression**](04-linear-regression/) | Soil temperature vs. ground cover | Correlation, simple linear model, residuals, prediction intervals |
-| 05 | ⭐ [**Case study: cassava dry matter**](05-case-study-cassava-dm/) | 1,286 cassava field plots, 189 accessions | Comparing three methods to measure dry matter and predicting NIRS values |
+| 01 | [**R basics and exploratory analysis**](01-r-basics-and-eda/) | Chili pepper (*Capsicum*) accessions · `Orange` trees | Data structures, missing-value codes (999 → `NA`), frequency tables, summary statistics, correlation heatmap, growth curves |
+| 02 | [**Data visualization with ggplot2**](02-data-visualization/) | `iris` · `ToothGrowth` · `ChickWeight` · `frijol` · Titanic | Grammar of graphics, bar, box and violin plots, themes, trends over time, and a visual story of who survived the Titanic |
+| 03 | [**Tidy data**](03-tidy-data/) | WHO tuberculosis report (`tidyr::who`) | Reshaping a messy real dataset step by step with `pivot_longer()` and `separate_wider_*()`, then exploring it |
+| 04 | [**Linear regression**](04-linear-regression/) | Soil temperature vs. ground cover | Correlation, simple linear model, residual diagnostics, confidence and prediction intervals |
+| 05 | ⭐ [**Case study: cassava dry matter**](05-case-study-cassava-dm/) | 1,286 cassava field plots, 189 accessions | Regression, Bland-Altman agreement and variety selection to compare three measurement methods |
 
 ---
 
@@ -42,27 +39,29 @@ Each folder contains an R Markdown report rendered as a GitHub document, so the 
 
 | Method | How | Trade-off |
 |---|---|---|
-| **Oven drying** (`DM_raw`) | Weigh, dry and weigh again | Reference method, but slow |
-| **Specific gravity** (`DM_gravity`) | Weigh the roots in air and in water | Fast and cheap, indirect |
-| **NIRS** (`DM_nirs`) | Near-infrared spectroscopy scan | Very fast, needs calibration |
+| **Oven drying** | Weigh, dry and weigh again | Reference method, but slow |
+| **Specific gravity** | Weigh the roots in air and in water | Fast and cheap, indirect |
+| **NIRS** | Near-infrared spectroscopy scan | Very fast, needs calibration |
 
-**First look at the data:**
+**Results** (compared against the oven):
 
-| Comparison | Correlation (r) |
-|---|---|
-| NIRS vs. oven | **0.97** |
-| Specific gravity vs. oven | 0.66 |
+| | NIRS | Specific gravity |
+|---|---|---|
+| Variation explained (R²) | **93%** | 43% |
+| Average bias | **+0.1 points** | −2.6 points |
+| 95% limits of agreement | **−2.5 to +2.7 points** | −10.2 to +5.1 points |
+| Same top 10% accessions as the oven | **14 of 19** | 9 of 19 |
 
-NIRS agrees closely with the reference method, while specific gravity is much less precise. The report fits regression models between the methods, checks their residuals, and predicts the NIRS value expected for a sample with **30% dry matter** in the oven.
+**Conclusion:** NIRS can replace the oven for routine screening, keeping oven drying on a subset of samples to recalibrate it. Specific gravity is useful only to discard clearly poor roots.
 
 ---
 
 ## 🛠️ Tools
 
 - **Language:** R
-- **Packages:** tidyverse (dplyr, tidyr, readr, ggplot2), ggpubr, plotly, agricolae, modeest
+- **Packages:** tidyverse (dplyr, tidyr, readr, ggplot2, stringr), ggpubr, agricolae, modeest, knitr
 - **Reports:** R Markdown → `github_document`
-- **Environment:** RStudio / Posit Cloud
+- **Environment:** RStudio
 
 ---
 
@@ -72,10 +71,10 @@ NIRS agrees closely with the reference method, while specific gravity is much le
 2. Install the packages:
 
 ```r
-install.packages(c("tidyverse", "ggpubr", "plotly", "agricolae", "modeest", "rmarkdown"))
+install.packages(c("tidyverse", "ggpubr", "agricolae", "modeest", "rmarkdown"))
 ```
 
-3. Open any `.Rmd` file and click **Knit**.
+3. Open the `README.Rmd` file inside any folder and click **Knit**.
 
 ---
 
@@ -88,10 +87,12 @@ r-analytical-methods/
 ├── 03-tidy-data/
 ├── 04-linear-regression/
 ├── 05-case-study-cassava-dm/
-│   ├── data/
-│   ├── cassava-dry-matter.Rmd
-│   └── cassava-dry-matter.md      # rendered report
-└── r-analytical-methods.Rproj
+│   ├── data/            # input data
+│   ├── figures/         # plots generated when knitting
+│   ├── README.Rmd       # source code and text
+│   └── README.md        # rendered report shown on GitHub
+├── r-analytical-methods.Rproj
+└── README.md
 ```
 
 ---
@@ -108,6 +109,6 @@ r-analytical-methods/
 
 <div align="center">
 
-Made by 💜 **[Maria Jose Ospina](https://github.com/naksu707)** 💜
+Made by 💜 **[María José Ospina Samboni](https://github.com/naksu707)** 💜
 
 </div>
