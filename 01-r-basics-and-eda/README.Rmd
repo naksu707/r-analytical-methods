@@ -1,6 +1,6 @@
 ---
 title: "01 · R Basics and Exploratory Data Analysis"
-author: "María José Ospina Samboni"
+author: "Maria Jose Ospina"
 output: github_document
 ---
 

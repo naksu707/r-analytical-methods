@@ -99,7 +99,7 @@ r-analytical-methods/
 ## 🗺️ Roadmap
 
 - [x] 01 · R basics and exploratory analysis
-- [ ] 02 · Data visualization with ggplot2
+- [x] 02 · Data visualization with ggplot2
 - [ ] 03 · Tidy data
 - [ ] 04 · Linear regression
 - [ ] 05 · Case study: cassava dry matter

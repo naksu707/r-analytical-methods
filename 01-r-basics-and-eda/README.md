@@ -1,6 +1,6 @@
 01 · R Basics and Exploratory Data Analysis
 ================
-María José Ospina Samboni
+Maria Jose Ospina
 
 This report covers the first steps of any analysis in R: working with
 the basic data structures, loading a real dataset, handling
