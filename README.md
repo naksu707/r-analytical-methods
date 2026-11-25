@@ -102,7 +102,7 @@ r-analytical-methods/
 - [x] 02 · Data visualization with ggplot2
 - [x] 03 · Tidy data
 - [x] 04 · Linear regression
-- [ ] 05 · Case study: cassava dry matter
+- [x] 05 · Case study: cassava dry matter
 
 ---
 
