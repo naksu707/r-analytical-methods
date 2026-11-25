@@ -98,7 +98,7 @@ r-analytical-methods/
 
 ## 🗺️ Roadmap
 
-- [ ] 01 · R basics and exploratory analysis
+- [x] 01 · R basics and exploratory analysis
 - [ ] 02 · Data visualization with ggplot2
 - [ ] 03 · Tidy data
 - [ ] 04 · Linear regression
