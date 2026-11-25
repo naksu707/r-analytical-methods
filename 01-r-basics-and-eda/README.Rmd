@@ -1,0 +1,297 @@
+---
+title: "01 · R Basics and Exploratory Data Analysis"
+author: "María José Ospina Samboni"
+output: github_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 7, fig.height = 4.5, dpi = 150, fig.path = "figures/"
+)
+```
+
+This report covers the first steps of any analysis in R: working with the basic data structures, loading a real dataset, handling missing-value codes and describing the data with tables, summary statistics and plots. It closes with a short exploratory analysis of the `Orange` tree-growth dataset.
+
+```{r libraries}
+library(tidyverse)
+library(modeest)   # most frequent value (mode)
+library(knitr)     # tables
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## 1. R essentials
+
+### Vectors, factors and data frames
+
+```{r essentials}
+# Numeric and character vectors
+x <- c(1, 2, 3, 4, 5)
+x_chr <- as.character(x)
+class(x); class(x_chr)
+
+# A vector holds a single type: mixing numbers and text turns everything into text
+mixed <- c(1, 2, 3, "2", "3")
+class(mixed)
+
+# Indexing
+x <- 1:8
+x[3]          # third element
+x[-4]         # all but the fourth
+x[x > 3]      # elements greater than 3
+
+# Factors: categorical variables with levels
+f <- factor(c("A", "B", "A", "C", "A", "C"))
+levels(f)
+table(f)
+
+# Data frames: one column per variable, one row per observation
+df <- data.frame(value = c(1, 2, 3, 4, 5),
+                 group = factor(c("A", "B", "A", "A", "C")))
+str(df)
+```
+
+### Matrices
+
+```{r matrices}
+m1 <- matrix(1:9, nrow = 3)
+m2 <- m1 * 15
+
+m1 + m2       # element-wise sum
+m1 %*% m2     # matrix product
+t(m1)         # transpose
+```
+
+### Measures of central tendency and outliers
+
+The mean is sensitive to extreme values; the median and the mode are not.
+
+```{r central-tendency}
+a <- c(5, 6, 6, 7, 7, 7, 8, 8, 9, 10)
+b <- c(5, 6, 6, 7, 7, 7, 8, 8, 9, 20)   # same data, one extreme value
+
+tibble(
+  dataset = c("Without outlier", "With outlier (20)"),
+  mean    = c(mean(a), mean(b)),
+  median  = c(median(a), median(b)),
+  mode    = c(mfv(a), mfv(b))
+) |> kable()
+```
+
+Changing a single value from 10 to 20 moves the mean from `r mean(a)` to `r mean(b)`, while the median and the mode stay the same.
+
+## 2. Chili pepper accessions
+
+The dataset describes **`r nrow(read_csv("data/chili_accessions.csv"))` chili pepper (*Capsicum*) accessions** from a germplasm collection, with six quantitative traits measured on the plants and fruits, and five qualitative traits recorded as numeric codes.
+
+### Load and rename
+
+```{r load}
+chili_raw <- read_csv("data/chili_accessions.csv")
+
+chili <- chili_raw |>
+  rename(
+    accession            = n_acces,
+    fruit_diameter_mm    = diametro_de_fruto_promedio_mm,
+    weight_100_seeds_g   = peso_100_semillas,
+    flowers_per_axil     = n_flores_axila,
+    weight_10_fruits_g   = peso_10_frutos_gr,
+    plant_height_cm      = altura_promedio_planta,
+    fruit_length_mm      = longitud_fruto_promedio_mm,
+    corolla_color        = color_de_corola,
+    fruit_epidermis      = tipo_epidermis_fruto,
+    fruit_shape          = forma_fruto,
+    flower_position      = posicion_de_la_flor,
+    corolla_shape        = forma_de_corola_flor
+  )
+
+glimpse(chili)
+```
+
+### Missing-value codes
+
+The dataset does not use empty cells for missing data. It uses codes instead: **`999`** in the quantitative traits and **`9`** in the qualitative ones. If they are not replaced, R treats them as real values and every mean and plot is wrong.
+
+```{r codes-before}
+quantitative <- c("fruit_diameter_mm", "weight_100_seeds_g", "flowers_per_axil",
+                  "weight_10_fruits_g", "plant_height_cm", "fruit_length_mm")
+qualitative  <- c("corolla_color", "fruit_epidermis", "fruit_shape",
+                  "flower_position", "corolla_shape")
+
+# Maximum value of each quantitative trait before cleaning
+chili |> summarise(across(all_of(quantitative), max)) |> kable()
+```
+
+```{r recode}
+chili <- chili |>
+  mutate(
+    across(all_of(quantitative), ~ na_if(.x, 999)),
+    across(all_of(qualitative),  ~ factor(na_if(.x, 9)))
+  )
+
+# Missing values per variable after recoding
+chili |>
+  summarise(across(everything(), ~ sum(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "missing") |>
+  filter(missing > 0) |>
+  arrange(desc(missing)) |>
+  kable()
+```
+
+```{r complete-rows}
+complete <- sum(complete.cases(chili))
+```
+
+Only **`r complete` of `r nrow(chili)` accessions** have every trait recorded, so each analysis below uses the values available for the variables involved instead of dropping whole accessions.
+
+### Qualitative traits
+
+```{r qualitative}
+table(chili$corolla_color, useNA = "ifany")
+
+# Two traits together: absolute and row-relative frequencies
+tab <- table(corolla_color = chili$corolla_color,
+             flower_position = chili$flower_position)
+tab
+round(prop.table(tab, margin = 1), 2)
+```
+
+```{r qualitative-plot}
+chili |>
+  pivot_longer(all_of(qualitative), names_to = "trait", values_to = "code") |>
+  ggplot(aes(x = code)) +
+  geom_bar(fill = "#5a78e0") +
+  facet_wrap(~ trait, scales = "free_x") +
+  labs(title = "Qualitative traits of the chili accessions",
+       x = "Descriptor code (NA = not recorded)", y = "Accessions")
+```
+
+### Quantitative traits
+
+```{r quantitative}
+chili |>
+  pivot_longer(all_of(quantitative), names_to = "trait", values_to = "value") |>
+  group_by(trait) |>
+  summarise(
+    n      = sum(!is.na(value)),
+    mean   = mean(value, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    sd     = sd(value, na.rm = TRUE),
+    min    = min(value, na.rm = TRUE),
+    max    = max(value, na.rm = TRUE)
+  ) |>
+  mutate(across(mean:max, ~ round(.x, 2))) |>
+  kable()
+```
+
+```{r distributions, fig.height = 5}
+chili |>
+  pivot_longer(all_of(quantitative), names_to = "trait", values_to = "value") |>
+  filter(!is.na(value)) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 12, fill = "#5a78e0", color = "white") +
+  facet_wrap(~ trait, scales = "free") +
+  labs(title = "Distribution of the quantitative traits", x = NULL, y = "Accessions")
+```
+
+### Relationships between traits
+
+```{r correlation}
+cor_matrix <- chili |>
+  select(all_of(quantitative)) |>
+  cor(use = "pairwise.complete.obs")
+
+round(cor_matrix, 2)
+```
+
+```{r correlation-plot, fig.height = 5}
+cor_matrix |>
+  as_tibble(rownames = "trait_1") |>
+  pivot_longer(-trait_1, names_to = "trait_2", values_to = "r") |>
+  ggplot(aes(trait_1, trait_2, fill = r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(r, 2)), size = 3.2) +
+  scale_fill_gradient2(low = "#a8367a", mid = "white", high = "#5a78e0", limits = c(-1, 1)) +
+  labs(title = "Correlation between quantitative traits", x = NULL, y = NULL) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1))
+```
+
+```{r strongest}
+strongest <- cor_matrix |>
+  as_tibble(rownames = "trait_1") |>
+  pivot_longer(-trait_1, names_to = "trait_2", values_to = "r") |>
+  filter(trait_1 < trait_2) |>
+  slice_max(abs(r), n = 1, with_ties = FALSE)
+```
+
+The strongest relationship is between **`r strongest$trait_1`** and **`r strongest$trait_2`** (r = `r round(strongest$r, 2)`).
+
+```{r scatter}
+chili |>
+  filter(!is.na(fruit_diameter_mm), !is.na(weight_10_fruits_g)) |>
+  ggplot(aes(fruit_diameter_mm, weight_10_fruits_g)) +
+  geom_point(size = 2.5, color = "#5a78e0") +
+  geom_smooth(method = "lm", se = FALSE, color = "#a8367a", linewidth = 0.8) +
+  labs(title = "Fruit diameter vs. fruit weight",
+       x = "Average fruit diameter (mm)", y = "Weight of 10 fruits (g)")
+```
+
+```{r boxplot}
+chili |>
+  filter(!is.na(corolla_color), !is.na(fruit_diameter_mm)) |>
+  ggplot(aes(corolla_color, fruit_diameter_mm, fill = corolla_color)) +
+  geom_boxplot(show.legend = FALSE, alpha = 0.6) +
+  geom_jitter(width = 0.15, show.legend = FALSE) +
+  labs(title = "Fruit diameter by corolla color code",
+       x = "Corolla color (descriptor code)", y = "Average fruit diameter (mm)")
+```
+
+## 3. Exercise: `Orange` tree growth
+
+The built-in `Orange` dataset records the **trunk circumference** of 5 orange trees measured at 7 ages.
+
+```{r orange}
+data("Orange")
+glimpse(Orange)
+summary(Orange)
+```
+
+```{r orange-growth}
+Orange |>
+  ggplot(aes(age, circumference, color = Tree, group = Tree)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2) +
+  labs(title = "Trunk growth of five orange trees",
+       x = "Age (days since 1968-12-31)", y = "Trunk circumference (mm)", color = "Tree")
+```
+
+```{r orange-final}
+Orange |>
+  group_by(Tree) |>
+  summarise(
+    final_circumference = max(circumference),
+    growth_mm_per_year  = round((max(circumference) - min(circumference)) /
+                                (max(age) - min(age)) * 365, 1)
+  ) |>
+  arrange(desc(final_circumference)) |>
+  kable()
+```
+
+```{r orange-cor}
+r_orange <- cor(Orange$age, Orange$circumference)
+```
+
+```{r orange-box}
+Orange |>
+  ggplot(aes(factor(age), circumference)) +
+  geom_boxplot(fill = "#b9b2ec") +
+  labs(title = "Circumference spread at each age",
+       x = "Age (days)", y = "Trunk circumference (mm)")
+```
+
+## Key takeaways
+
+- Missing-value codes such as `999` and `9` must be replaced with `NA` before any calculation; otherwise a single code can distort means, correlations and plots.
+- In the chili collection, only `r complete` of `r nrow(chili)` accessions are complete, so analyses use the data available for each variable.
+- In the `Orange` data, age and trunk circumference are strongly correlated (r = `r round(r_orange, 2)`), but the trees grow at different rates, and the differences between them widen with age.
