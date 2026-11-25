@@ -1,0 +1,170 @@
+---
+title: "04 · Simple Linear Regression: Soil Temperature and Ground Cover"
+author: "Maria Jose Ospina"
+output: github_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 7, fig.height = 4.5, dpi = 150, fig.path = "figures/"
+)
+```
+
+Does more vegetation cover keep the soil cooler, and by how much? This report measures the relationship between **ground cover** and **soil temperature**, fits a simple linear regression, checks its assumptions and uses it to make predictions with uncertainty.
+
+```{r libraries}
+library(tidyverse)
+library(ggpubr)   # scatter plot with correlation
+library(knitr)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## 1. Data
+
+Ten plots, each with its percentage of ground cover and its soil temperature.
+
+```{r load}
+soil <- read_delim("data/soil_temperature.csv", delim = ";", trim_ws = TRUE) |>
+  rename(cover = Cobertura, temperature = Temperatura)
+
+kable(soil, col.names = c("Ground cover (%)", "Soil temperature (°C)"))
+```
+
+## 2. Correlation
+
+```{r correlation}
+r <- cor(soil$cover, soil$temperature)
+cor_test <- cor.test(soil$cover, soil$temperature)
+cor_test
+```
+
+The Pearson correlation is **r = `r round(r, 2)`**: a strong negative relationship. Plots with more cover have cooler soil.
+
+```{r scatter}
+ggscatter(soil, x = "cover", y = "temperature",
+          add = "reg.line", conf.int = TRUE,
+          color = "#0072B2", size = 2.5,
+          add.params = list(color = "#D55E00", fill = "grey85")) +
+  stat_cor(method = "pearson", label.x = 75, label.y = 33, r.accuracy = 0.01, p.accuracy = 0.001) +
+  theme_minimal(base_size = 12) +
+  labs(title = "Soil temperature vs. ground cover",
+       x = "Ground cover (%)", y = "Soil temperature (°C)")
+```
+
+## 3. The model
+
+$$\text{temperature} = \beta_0 + \beta_1 \cdot \text{cover} + \varepsilon$$
+
+```{r model}
+model <- lm(temperature ~ cover, data = soil)
+summary(model)
+anova(model)
+```
+
+```{r coefficients}
+b0 <- coef(model)[["(Intercept)"]]
+b1 <- coef(model)[["cover"]]
+r2 <- summary(model)$r.squared
+p_value <- summary(model)$coefficients["cover", "Pr(>|t|)"]
+ci_b1 <- confint(model)["cover", ]
+```
+
+| Term | Estimate | Meaning |
+|---|---|---|
+| Intercept (β₀) | `r round(b0, 2)` °C | Expected temperature at 0% cover. It is outside the observed range (56–92%), so it should not be interpreted literally. |
+| Slope (β₁) | `r round(b1, 3)` °C per % | Each additional percentage point of cover lowers the soil temperature by about `r round(abs(b1), 2)` °C. |
+| R² | `r round(r2, 3)` | Ground cover explains `r round(r2 * 100)`% of the variation in soil temperature. |
+
+The slope is significant (p `r ifelse(p_value < 0.001, "< 0.001", paste("=", round(p_value, 3)))`), and its 95% confidence interval goes from `r round(ci_b1[1], 2)` to `r round(ci_b1[2], 2)` °C per percentage point: it does not include zero.
+
+So **10 more percentage points of cover mean about `r round(abs(b1) * 10, 1)` °C cooler soil**.
+
+## 4. Checking the assumptions
+
+A linear model is only reliable if its residuals (observed − fitted) behave well: no pattern against the fitted values, roughly normal, and with constant spread.
+
+```{r residuals-table}
+soil_fit <- soil |>
+  mutate(fitted = fitted(model), residual = residuals(model))
+
+kable(soil_fit, digits = 2,
+      col.names = c("Cover (%)", "Temperature (°C)", "Fitted (°C)", "Residual (°C)"))
+```
+
+```{r residual-plots, fig.height = 3.8, fig.width = 9}
+p1 <- ggplot(soil_fit, aes(fitted, residual)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(size = 2.5, color = "#0072B2") +
+  labs(title = "Residuals vs. fitted", x = "Fitted temperature (°C)", y = "Residual (°C)")
+
+p2 <- ggplot(soil_fit, aes(sample = residual)) +
+  stat_qq(size = 2.5, color = "#0072B2") +
+  stat_qq_line(color = "#D55E00") +
+  labs(title = "Normal Q-Q plot", x = "Theoretical quantiles", y = "Residual (°C)")
+
+ggarrange(p1, p2, ncol = 2)
+```
+
+```{r shapiro}
+shapiro <- shapiro.test(residuals(model))
+shapiro
+```
+
+The residuals show no clear pattern and the Shapiro-Wilk test does not reject normality (p = `r round(shapiro$p.value, 2)`). With only `r nrow(soil)` plots, these checks have little power, so the conclusions should be confirmed with more data.
+
+## 5. Predictions with uncertainty
+
+Two kinds of intervals:
+
+- **Confidence interval:** where the **average** temperature of plots with that cover is expected to be.
+- **Prediction interval:** where the temperature of **one new plot** is expected to be. It is always wider.
+
+```{r intervals}
+grid <- tibble(cover = seq(min(soil$cover), max(soil$cover), length.out = 100))
+
+bands <- grid |>
+  bind_cols(
+    as_tibble(predict(model, grid, interval = "confidence", level = 0.95)) |>
+      rename(fit = fit, conf_low = lwr, conf_high = upr),
+    as_tibble(predict(model, grid, interval = "prediction", level = 0.95)) |>
+      select(pred_low = lwr, pred_high = upr)
+  )
+
+ggplot(bands, aes(cover)) +
+  geom_ribbon(aes(ymin = pred_low, ymax = pred_high), fill = "#0072B2", alpha = 0.12) +
+  geom_ribbon(aes(ymin = conf_low, ymax = conf_high), fill = "#0072B2", alpha = 0.3) +
+  geom_line(aes(y = fit), color = "#0072B2", linewidth = 1) +
+  geom_segment(data = soil_fit, aes(x = cover, xend = cover, y = temperature, yend = fitted),
+               color = "#D55E00", linewidth = 0.5) +
+  geom_point(data = soil_fit, aes(y = temperature), size = 2.5) +
+  labs(title = "Fitted line with 95% confidence and prediction bands",
+       subtitle = "Dark band: confidence (mean) · Light band: prediction (single plot) · Red: residuals",
+       x = "Ground cover (%)", y = "Soil temperature (°C)")
+```
+
+### Prediction at 80% cover
+
+```{r predict-80}
+new_plot <- tibble(cover = 80)
+
+pred_80 <- predict(model, new_plot, interval = "prediction", level = 0.95)
+conf_80 <- predict(model, new_plot, interval = "confidence", level = 0.95)
+
+tibble(
+  interval = c("Confidence (mean of plots)", "Prediction (one plot)"),
+  estimate = c(conf_80[, "fit"], pred_80[, "fit"]),
+  lower    = c(conf_80[, "lwr"], pred_80[, "lwr"]),
+  upper    = c(conf_80[, "upr"], pred_80[, "upr"])
+) |> kable(digits = 2)
+```
+
+A plot with **80% ground cover** is expected to have a soil temperature of about **`r round(pred_80[, "fit"], 1)` °C**. A single new plot could reasonably fall between `r round(pred_80[, "lwr"], 1)` and `r round(pred_80[, "upr"], 1)` °C.
+
+## Key takeaways
+
+- Ground cover and soil temperature are strongly and negatively related (r = `r round(r, 2)`, R² = `r round(r2, 2)`).
+- Each extra percentage point of cover lowers soil temperature by about `r round(abs(b1), 2)` °C within the observed range (56–92%).
+- Predictions should always come with an interval, and the model should not be used outside the range of the data.
+- With only `r nrow(soil)` plots, the results are a good first estimate but need more data to be confirmed.
