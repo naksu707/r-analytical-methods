@@ -1,0 +1,242 @@
+---
+title: "03 · Tidy Data: WHO Tuberculosis Cases"
+author: "Maria Jose Ospina"
+output: github_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 7, fig.height = 4.5, dpi = 150, fig.path = "figures/"
+)
+```
+
+Real datasets rarely arrive ready to analyze. This report takes the **World Health Organization (WHO) tuberculosis dataset**, a classic example of messy data, and reshapes it step by step into a **tidy** format with `tidyr` and `dplyr`. It then shows why the effort pays off: once the data is tidy, summaries and plots take only a few lines.
+
+```{r libraries}
+library(tidyverse)
+library(knitr)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## 1. What is tidy data?
+
+A dataset is **tidy** when:
+
+1. Each **variable** is a column.
+2. Each **observation** is a row.
+3. Each **value** is a cell.
+
+## 2. The raw data
+
+The data comes from the WHO *Global Tuberculosis Report* and is included in `tidyr` as `who`. It records tuberculosis cases by country, year, diagnosis method, sex and age group.
+
+```{r raw}
+who
+dim(who)
+```
+
+The dataset has **`r ncol(who)` columns**, but only a few of them are real variables:
+
+- `country`, `iso2` and `iso3` all identify the country, so two of them are redundant.
+- `year` is a variable.
+- The other `r ncol(who) - 4` columns, from `new_sp_m014` to `newrel_f65`, are **not variables**: their names combine several pieces of information (diagnosis, sex and age), and their cells hold the number of cases.
+
+## 3. Step by step
+
+### Step 1 · Gather the case columns into rows
+
+All the case columns are stacked into two: `key` (the old column name) and `cases` (the count). Most cells are empty, so `values_drop_na = TRUE` removes them.
+
+```{r step1}
+who1 <- who |>
+  pivot_longer(
+    cols = new_sp_m014:newrel_f65,
+    names_to = "key",
+    values_to = "cases",
+    values_drop_na = TRUE
+  )
+
+who1
+```
+
+Counting the keys shows the structure of the codes:
+
+```{r keys}
+who1 |> count(key)
+```
+
+### Step 2 · Understand the codes
+
+Each key follows the pattern `new_<type>_<sex><age>`:
+
+| Part | Values | Meaning |
+|---|---|---|
+| Prefix | `new` | New tuberculosis cases (every column in this dataset) |
+| Type | `sp` | Pulmonary, smear-positive: detected with a sputum smear test |
+| | `sn` | Pulmonary, smear-negative: not detected with a smear test |
+| | `ep` | Extrapulmonary: outside the lungs |
+| | `rel` | Relapse: a patient who had tuberculosis before |
+| Sex | `m` / `f` | Male / female |
+| Age group | `014`, `1524`, `2534`, `3544`, `4554`, `5564`, `65` | 0–14, 15–24, 25–34, 35–44, 45–54, 55–64 and 65+ years |
+
+### Step 3 · Fix the inconsistent names
+
+The relapse columns are written `newrel` instead of `new_rel`. If this is not fixed, the next step splits them incorrectly.
+
+```{r step3}
+who2 <- who1 |>
+  mutate(key = str_replace(key, "newrel", "new_rel"))
+
+who2 |> filter(str_detect(key, "rel")) |> distinct(key) |> head()
+```
+
+### Step 4 · Split the key into its parts
+
+The key is split at each `_` into three columns.
+
+```{r step4}
+who3 <- who2 |>
+  separate_wider_delim(key, delim = "_", names = c("new", "type", "sexage"))
+
+who3
+```
+
+### Step 5 · Drop redundant columns
+
+`new` has the same value in every row, and `iso2` and `iso3` repeat `country`.
+
+```{r step5}
+who3 |> count(new)
+
+who4 <- who3 |>
+  select(-new, -iso2, -iso3)
+```
+
+### Step 6 · Separate sex and age
+
+The first character is the sex and the rest is the age group.
+
+```{r step6}
+who5 <- who4 |>
+  separate_wider_regex(sexage, patterns = c(sex = "[mf]", age = ".*"))
+
+who5
+```
+
+### Step 7 · Make the values readable
+
+```{r step7}
+age_labels <- c("014" = "0–14", "1524" = "15–24", "2534" = "25–34", "3544" = "35–44",
+                "4554" = "45–54", "5564" = "55–64", "65" = "65+")
+
+type_labels <- c(sp = "Smear-positive", sn = "Smear-negative",
+                 ep = "Extrapulmonary", rel = "Relapse")
+
+who_tidy <- who5 |>
+  mutate(
+    type = factor(type_labels[type], levels = type_labels),
+    sex  = factor(sex, levels = c("f", "m"), labels = c("Female", "Male")),
+    age  = factor(age_labels[age], levels = age_labels)
+  )
+
+who_tidy
+```
+
+### All steps in one pipeline
+
+```{r pipeline}
+who_tidy_pipeline <- who |>
+  pivot_longer(new_sp_m014:newrel_f65, names_to = "key",
+               values_to = "cases", values_drop_na = TRUE) |>
+  mutate(key = str_replace(key, "newrel", "new_rel")) |>
+  separate_wider_delim(key, delim = "_", names = c("new", "type", "sexage")) |>
+  select(-new, -iso2, -iso3) |>
+  separate_wider_regex(sexage, patterns = c(sex = "[mf]", age = ".*"))
+
+# Same result as the step-by-step version
+nrow(who_tidy_pipeline) == nrow(who5)
+```
+
+## 4. Before and after
+
+```{r before-after}
+tibble(
+  dataset = c("Raw (who)", "Tidy (who_tidy)"),
+  rows    = c(nrow(who), nrow(who_tidy)),
+  columns = c(ncol(who), ncol(who_tidy))
+) |> kable(format.args = list(big.mark = ","))
+```
+
+From a wide table with `r ncol(who)` columns to a long table with `r ncol(who_tidy)` columns, one row per country, year, type, sex and age group.
+
+## 5. Why it pays off: exploring the tidy data
+
+> **Note:** reporting practices changed over time (for example, relapse cases only appear in the most recent years), so totals across years reflect **reported** cases, not true incidence.
+
+### Reported cases over time
+
+```{r cases-year}
+who_tidy |>
+  filter(year >= 1995) |>
+  group_by(year, sex) |>
+  summarise(cases = sum(cases), .groups = "drop") |>
+  ggplot(aes(year, cases / 1e6, color = sex)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  scale_color_manual(values = c(Female = "#D55E00", Male = "#0072B2")) +
+  labs(title = "Reported new tuberculosis cases by sex",
+       x = NULL, y = "Cases (millions)", color = NULL)
+```
+
+```{r male-share}
+male_share <- who_tidy |>
+  group_by(sex) |>
+  summarise(cases = sum(cases)) |>
+  mutate(share = cases / sum(cases)) |>
+  filter(sex == "Male") |>
+  pull(share)
+```
+
+Men account for **`r round(male_share * 100)`%** of all reported cases in the dataset.
+
+### Cases by age group and sex
+
+```{r cases-age}
+who_tidy |>
+  group_by(age, sex) |>
+  summarise(cases = sum(cases), .groups = "drop") |>
+  ggplot(aes(age, cases / 1e6, fill = sex)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = c(Female = "#D55E00", Male = "#0072B2")) +
+  labs(title = "Reported cases by age group",
+       x = "Age group (years)", y = "Cases (millions)", fill = NULL)
+```
+
+### Countries with the most reported cases
+
+```{r top-countries, fig.height = 5}
+top_countries <- who_tidy |>
+  group_by(country) |>
+  summarise(cases = sum(cases)) |>
+  slice_max(cases, n = 10)
+
+top_countries |>
+  ggplot(aes(cases / 1e6, fct_reorder(country, cases))) +
+  geom_col(fill = "#0072B2") +
+  labs(title = "Top 10 countries by reported cases",
+       x = "Cases (millions)", y = NULL)
+```
+
+```{r top-share}
+top_share <- sum(top_countries$cases) / sum(who_tidy$cases)
+```
+
+The 10 countries with the most reported cases account for **`r round(top_share * 100)`%** of all cases in the dataset.
+
+## Key takeaways
+
+- Column names can hide several variables at once; `pivot_longer()` and the `separate_wider_*()` functions turn them back into proper columns.
+- Small inconsistencies (`newrel` vs. `new_rel`) must be fixed **before** splitting, or the result is silently wrong.
+- Once the data is tidy, every summary above is just `group_by()` + `summarise()` + `ggplot()`.
