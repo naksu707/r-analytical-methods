@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📊 R Analytical Methods
+# R Analytical Methods
 ### From raw data to models: cleaning, visualization and regression in R
 
 <p>
